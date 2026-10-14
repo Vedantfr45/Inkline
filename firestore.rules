@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Inkline · FE Division A, PRPCET
+// - Only admins (people listed in the "admins" collection) can post, edit or delete class assignments.
+// - Every signed-in classmate can read the class list and the leaderboard.
+// - Each classmate can only change their own leaderboard entry, one tick at a time,
+//   and every tick is stamped with Google's server time, so nobody can fake finishing early.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // You add yourself here by hand in the Firebase console (see the setup guide).
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /classAssignments/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin()
+        && request.resource.data.title is string && request.resource.data.title.size() <= 140
+        && request.resource.data.due is string && request.resource.data.due.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.notes is string && request.resource.data.notes.size() <= 4000;
+      allow delete: if isAdmin();
+    }
+
+    match /classImages/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && request.resource.data.data is string && request.resource.data.aid is string;
+      allow delete: if isAdmin();
+    }
+
+    // done: a map of { assignmentId: time finished }
+    // last: the id of the assignment ticked or unticked in this write
+    function tickOk() {
+      let before = resource == null ? {} : resource.data.done;
+      let after = request.resource.data.done;
+      let k = request.resource.data.last;
+      let changed = after.diff(before).affectedKeys();
+      return changed.size() == 0
+        || (changed.hasOnly([k]) && (!(k in after) || after[k] == request.time));
+    }
+
+    match /students/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'done', 'last'])
+        && request.resource.data.last is string
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && (request.resource.data.photo == null || (request.resource.data.photo is string && request.resource.data.photo.size() <= 500))
+        && request.resource.data.done is map
+        && request.resource.data.done.size() <= 500
+        && tickOk();
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}
