@@ -316,7 +316,8 @@ const store={
 
 /* ---------- state ---------- */
 const DEFAULT_META=()=>({xp:0,badges:{},seeded:false,classAsked:false,classMode:'no',clsXp:{},subjects:[
-  {id:'math',name:'Maths',color:0},{id:'phy',name:'Physics',color:1},{id:'prog',name:'Programming',color:2},{id:'eng',name:'English',color:3}]});
+  {id:'math',name:'Maths',color:0},{id:'phy',name:'Physics',color:1},{id:'chem',name:'Chemistry',color:2},{id:'mech',name:'Mechanics',color:3},
+  {id:'beee',name:'BEEE',color:4},{id:'pce',name:'PCE',color:5},{id:'cprog',name:'C Programming',color:6},{id:'hv',name:'Human Values',color:7}]});
 const S={local:[],items:[],meta:DEFAULT_META(),view:'list',filter:'all',showDone:false,calMonth:(()=>{const d=today0();d.setDate(1);return d})(),calSel:ymd(today0()),edit:null,
   auth:null,fdb:null,cls:{user:null,isAdmin:false,assignments:[],students:{},loaded:false,unsubs:[]}};
 const saveMeta=()=>store.put('meta',S.meta,'state').catch(()=>{});
@@ -832,9 +833,9 @@ $('#importInput').addEventListener('change',e=>{const f=e.target.files[0];e.targ
   try{const m=await store.get('meta','state');if(m)S.meta=Object.assign(DEFAULT_META(),m);S.local=(await store.all('items'))||[]}catch(e){}
   if(!S.meta.seeded){
     const ex=[
-      {title:"Physics lab write-up: Ohm's law",subjectId:'phy',due:addDays(1),notes:'Readings table, V vs I graph, three sources of error.\nCopy the circuit diagram from the reference photo.'},
-      {title:'Maths tutorial sheet 5',subjectId:'math',due:addDays(0),notes:"Q1 to Q12. Laplace transforms. Q7 is from last year's paper."},
-      {title:'Programming assignment 2: ER diagram',subjectId:'prog',due:addDays(5),notes:'Library management system. Entities: Book, Member, Loan, Fine.'}];
+      {title:"Physics journal: Newton's rings",subjectId:'phy',due:addDays(1),notes:'Readings table, calculation of wavelength, result and conclusion.\nCopy the ray diagram from the reference photo.'},
+      {title:'Maths tutorial sheet 5',subjectId:'math',due:addDays(0),notes:"Q1 to Q12 on matrices. Q7 is from last year's paper."},
+      {title:'C Programming practical 3: loops',subjectId:'cprog',due:addDays(5),notes:'Programs: factorial, Fibonacci series, prime check. Write the output for each.'}];
     for(const x of ex){const it={id:uid(),status:'todo',createdAt:Date.now(),fileIds:[],xpAwarded:0,sample:true,...x};S.local.push(it);await saveItem(it)}
     S.meta.seeded=true;await saveMeta();
   }
