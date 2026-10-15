@@ -9,76 +9,77 @@ Made for FE Division A, PRPCET. Built by Vedant.
 - When you post a new class assignment, everyone who turned on notifications gets a **phone notification** within about 10 minutes.
 - The **Class** tab ranks everyone. Finishing a class assignment on time is worth 10 points and finishing late is worth 5. Each tick is stamped with Google's server time, so nobody can fake finishing early.
 
+**Website:** https://inkline-1234.web.app
+
 ## Files
 
 | File | What it is |
 |---|---|
 | `index.html` | The whole website |
-| `firebase-config.js` | Your Firebase settings (you fill this in) |
+| `firebase-config.js` | Firebase settings for the `inkline-d215d` project |
 | `firestore.rules` | Who can read and write what in the database |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Notifications, the app icon and Add to Home Screen |
+| `firebase.json`, `.firebaserc`, `.github/workflows/deploy.yml` | Publishes the site to Firebase Hosting every time something is merged to main |
 | `.github/workflows/notify.yml`, `scripts/notify.mjs` | Sends the notifications, running on GitHub every 10 minutes |
 
 It costs nothing. Firebase's free Spark plan and GitHub's free Actions minutes for public repositories are plenty for one class.
 
-## Setup (about 20 minutes)
+## Setup
 
-### 1. Make the Firebase project
-1. Go to **console.firebase.google.com** and sign in with your Google account.
-2. Click **Create a project** and name it `inkline`. You can turn Google Analytics off.
+Done already: the Firebase project (`inkline-d215d`), the web app, the Hosting site (`inkline-1234`) and the settings in `firebase-config.js`.
 
-### 2. Get your settings into `firebase-config.js`
-1. On the project home page, click the **web icon `</>`** ("Add app").
-2. Name it `Inkline`. Leave "Firebase Hosting" unticked, then click **Register app**.
-3. You'll see `const firebaseConfig = { apiKey: "...", ... }`. Copy each value into the matching line of `firebase-config.js`.
-   These values are meant to be public. The rules in step 4 are what protect the data.
+### 1. Turn on Google sign-in
+1. In Firebase, open **Build → Authentication → Get started**.
+2. Under **Sign-in method**, choose **Google**, switch it on, pick your email as the support email, and tap **Save**.
+3. Open **Authentication → Settings → Authorized domains**. If `inkline-1234.web.app` isn't in the list, tap **Add domain** and add it.
 
-### 3. Turn on Google sign-in
-1. In the left menu, open **Build → Authentication → Get started**.
-2. Under **Sign-in method**, choose **Google**, switch it on, pick your email as the support email, and click **Save**.
-
-### 4. Create the database and paste the rules
+### 2. Create the database and paste the rules
 1. Open **Build → Firestore Database → Create database**.
 2. For location, pick **asia-south1 (Mumbai)**. You can't change this later.
 3. Start in **production mode**.
-4. Open the **Rules** tab, delete what's there, paste everything from `firestore.rules`, and click **Publish**.
+4. Open the **Rules** tab, delete what's there, paste everything from `firestore.rules`, and tap **Publish**.
 
-### 5. Put the website online with GitHub Pages
-1. On github.com, make the repository **public** (Settings → General → Danger Zone → Change visibility) if it isn't already.
-2. Make sure `index.html` and `firebase-config.js` are in the main branch.
-3. Go to **Settings → Pages**. Under "Build and deployment", choose **Deploy from a branch**, then pick **main** and **/ (root)**, and click **Save**.
-4. Wait a minute or two. Your site will be at `https://vedantfr45.github.io/Inkline/`.
+### 3. Get the web push key
+In Firebase, open **Project settings (gear icon) → Cloud Messaging**. Under **Web configuration → Web Push certificates**, tap **Generate key pair**. Copy the long key into `vapidKey` in `firebase-config.js`, or send it to Claude to add.
 
-### 6. Allow your website to use Google sign-in
-In Firebase, go to **Authentication → Settings → Authorized domains → Add domain** and add `vedantfr45.github.io`.
+### 4. Give GitHub the Firebase key (a laptop is easier)
+This one key lets GitHub publish the website and send notifications.
+1. Open **Project settings → Service accounts** and tap **Generate new private key**. A `.json` file downloads.
+   This file is a password for your whole Firebase project. Never upload it to the repository or send it to anyone.
+2. In the GitHub repository, go to **Settings → Secrets and variables → Actions → New repository secret**.
+   - Name: `FIREBASE_SERVICE_ACCOUNT`
+   - Secret: open the `.json` file, copy **everything** in it, and paste it here. Then tap **Add secret**.
+3. Give that key permission to publish. Go to **console.cloud.google.com**, pick the **InkLine** project, and open **IAM & Admin → IAM**. Find the account that starts with `firebase-adminsdk-` and tap its **pencil**. Tap **Add another role**, choose **Firebase Hosting Admin**, and tap **Save**.
 
-### 7. Make yourself the class admin
-1. Open your website, tap **Yes**, and sign in with Google.
+### 5. Publish
+1. Open the repository's **Actions** tab. If GitHub asks, tap **I understand my workflows, go ahead and enable them**.
+2. Open **Publish to Firebase Hosting** and tap **Run workflow**. When it shows a green tick, the site is live at https://inkline-1234.web.app.
+3. Open **Send class notifications** and tap **Run workflow** once too, to check it also gets a green tick.
+
+From now on, every merge to main publishes the site by itself within a couple of minutes.
+
+### 6. Make yourself the class admin
+1. Open https://inkline-1234.web.app, tap **Yes**, and sign in with Google.
 2. In Firebase, go to **Authentication → Users** and copy the **User UID** next to your email.
 3. Go to **Firestore Database → Data → Start collection**:
    - Collection ID: `admins`
    - Document ID: paste your User UID
-   - Add one field: `role` (string) = `admin`, then click **Save**.
+   - Add one field: `role` (string) = `admin`, then tap **Save**.
 4. Reload the website. Now when you tap **New**, you'll see **Post to all of Div A**.
 
 Want to make a CR or a friend an admin too? Add their User UID to `admins` the same way.
 
-### 8. Turn on notifications
-1. **Web push key:** in Firebase, open **Project settings (gear icon) → Cloud Messaging**. Under **Web configuration → Web Push certificates**, tap **Generate key pair**. Copy the long key into `vapidKey` in `firebase-config.js`.
-2. **Sender key:** open **Project settings → Service accounts** and tap **Generate new private key**. A `.json` file downloads.
-   This file is a password for your whole Firebase project. Never upload it to the repository or send it to anyone.
-3. **Give the key to GitHub:** in your repository, go to **Settings → Secrets and variables → Actions → New repository secret**.
-   - Name: `FIREBASE_SERVICE_ACCOUNT`
-   - Secret: open the downloaded `.json` file, copy **everything** in it, and paste it here. Then tap **Add secret**.
-4. **Switch the sender on:** open the repository's **Actions** tab. If GitHub asks, tap **I understand my workflows, go ahead and enable them**. Then open **Send class notifications** and tap **Run workflow** once to check it finishes with a green tick.
-5. On your phone, open Inkline and turn on notifications when it asks, or go to **More → Turn on notifications**.
+### 7. Test notifications, then share
+1. Turn on notifications on your phone when Inkline asks, or go to **More → Turn on notifications**.
+2. On a second phone, sign in with a different Google account and turn notifications on there too.
+3. Post a test class assignment. The second phone should get a notification within about 10 to 20 minutes.
+4. Send **https://inkline-1234.web.app** in the class WhatsApp group. Tell everyone to open it in **Chrome or Safari**, because Google sign-in doesn't work inside WhatsApp's or Instagram's built-in browser. On Android, Chrome's menu has **Add to Home screen**, so it opens like an app.
 
-How it works: each phone that turns on notifications is saved in the database. Every 10 minutes, GitHub checks for class assignments posted since its last check and sends a notification to all those phones. GitHub sometimes runs the check a little late, so a notification can take up to about 20 minutes.
+How notifications work: each phone that turns them on is saved in the database. Every 10 minutes, GitHub checks for class assignments posted since its last check and sends a notification to all those phones.
 
 **iPhone:** notifications only work after **Share → Add to Home Screen**, then opening Inkline from the Home Screen (iOS 16.4 or newer).
 
-### 9. Share it with the class
-Send the link in the class WhatsApp group. Tell everyone to open it in **Chrome or Safari**, because Google sign-in doesn't work inside WhatsApp's or Instagram's built-in browser. On Android, Chrome's menu has **Add to Home screen**, so it opens like an app.
+The old GitHub Pages address (vedantfr45.github.io/Inkline) still works, but notifications are tied to one address, so share only the `web.app` link. You can switch GitHub Pages off under **Settings → Pages**.
 
 ## Changing things later
 - **Edit a class assignment:** open it and tap **Edit** (admins only).
