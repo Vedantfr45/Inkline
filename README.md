@@ -5,7 +5,8 @@ Inkline is a website for tracking your assignments. Earn points for writing them
 Made for FE Division A, PRPCET. Built by Vedant.
 
 - Everyone's **own assignments**, photos, XP, badges and plant are saved on their own phone.
-- **Class assignments** that you post show up for everyone who says yes to "Are you from FE Division A, PRPCET (Pravin Rohidas Patil College)?" and signs in with Google.
+- On first open, everyone sees **"Are you PRP Division A FE?"**. Tapping **Yes** and signing in with Google gets them every class assignment you post.
+- When you post a new class assignment, everyone who turned on notifications gets a **phone notification** within about 10 minutes.
 - The **Class** tab ranks everyone. Finishing a class assignment on time is worth 10 points and finishing late is worth 5. Each tick is stamped with Google's server time, so nobody can fake finishing early.
 
 ## Files
@@ -15,8 +16,10 @@ Made for FE Division A, PRPCET. Built by Vedant.
 | `index.html` | The whole website |
 | `firebase-config.js` | Your Firebase settings (you fill this in) |
 | `firestore.rules` | Who can read and write what in the database |
+| `sw.js`, `manifest.webmanifest`, `icons/` | Notifications, the app icon and Add to Home Screen |
+| `.github/workflows/notify.yml`, `scripts/notify.mjs` | Sends the notifications, running on GitHub every 10 minutes |
 
-It costs nothing. Firebase's free Spark plan is plenty for one class.
+It costs nothing. Firebase's free Spark plan and GitHub's free Actions minutes for public repositories are plenty for one class.
 
 ## Setup (about 20 minutes)
 
@@ -50,7 +53,7 @@ It costs nothing. Firebase's free Spark plan is plenty for one class.
 In Firebase, go to **Authentication → Settings → Authorized domains → Add domain** and add `vedantfr45.github.io`.
 
 ### 7. Make yourself the class admin
-1. Open your website, tap **Yes, I'm in Div A**, and sign in with Google.
+1. Open your website, tap **Yes**, and sign in with Google.
 2. In Firebase, go to **Authentication → Users** and copy the **User UID** next to your email.
 3. Go to **Firestore Database → Data → Start collection**:
    - Collection ID: `admins`
@@ -60,7 +63,21 @@ In Firebase, go to **Authentication → Settings → Authorized domains → Add 
 
 Want to make a CR or a friend an admin too? Add their User UID to `admins` the same way.
 
-### 8. Share it with the class
+### 8. Turn on notifications
+1. **Web push key:** in Firebase, open **Project settings (gear icon) → Cloud Messaging**. Under **Web configuration → Web Push certificates**, tap **Generate key pair**. Copy the long key into `vapidKey` in `firebase-config.js`.
+2. **Sender key:** open **Project settings → Service accounts** and tap **Generate new private key**. A `.json` file downloads.
+   This file is a password for your whole Firebase project. Never upload it to the repository or send it to anyone.
+3. **Give the key to GitHub:** in your repository, go to **Settings → Secrets and variables → Actions → New repository secret**.
+   - Name: `FIREBASE_SERVICE_ACCOUNT`
+   - Secret: open the downloaded `.json` file, copy **everything** in it, and paste it here. Then tap **Add secret**.
+4. **Switch the sender on:** open the repository's **Actions** tab. If GitHub asks, tap **I understand my workflows, go ahead and enable them**. Then open **Send class notifications** and tap **Run workflow** once to check it finishes with a green tick.
+5. On your phone, open Inkline and turn on notifications when it asks, or go to **More → Turn on notifications**.
+
+How it works: each phone that turns on notifications is saved in the database. Every 10 minutes, GitHub checks for class assignments posted since its last check and sends a notification to all those phones. GitHub sometimes runs the check a little late, so a notification can take up to about 20 minutes.
+
+**iPhone:** notifications only work after **Share → Add to Home Screen**, then opening Inkline from the Home Screen (iOS 16.4 or newer).
+
+### 9. Share it with the class
 Send the link in the class WhatsApp group. Tell everyone to open it in **Chrome or Safari**, because Google sign-in doesn't work inside WhatsApp's or Instagram's built-in browser. On Android, Chrome's menu has **Add to Home screen**, so it opens like an app.
 
 ## Changing things later
@@ -72,3 +89,5 @@ Send the link in the class WhatsApp group. Tell everyone to open it in **Chrome 
 - People tick "done" themselves, so the leaderboard trusts them. The server time on each tick stops anyone from faking finishing early.
 - Class assignments can include photos, but not PDFs. Photos are shrunk to under about 0.8 MB each so they fit in the free database.
 - Personal assignments live only in that phone's browser. Use **More → Save full backup** now and then.
+- GitHub pauses scheduled workflows in a repository with no commits for 60 days. If notifications stop, open **Actions → Send class notifications** and tap **Enable workflow**.
+- If someone is offline when you post, they still see the assignment marked **New** next time they open Inkline.

@@ -7,6 +7,11 @@
 <meta name="theme-color" content="#1b1f27" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Assignment tracker for FE Division A, PRPCET. Built by Vedant.">
 <title>Inkline</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -107,6 +112,7 @@ main{padding-inline:38px 16px;padding-block:14px 0;max-width:760px}
 .clip svg{width:14px;height:14px}
 .ex{font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--ink-soft);border-radius:3px;padding:0 4px}
 .ex.cls{border-color:var(--danger);color:var(--danger);font-weight:600}
+.ex.new{background:var(--hl);color:var(--hl-ink);border-color:var(--hl-ink);font-weight:700}
 .empty{font-family:var(--f-display);font-size:18px;color:var(--ink-soft);padding:18px 4px;line-height:var(--rule);margin:0}
 
 /* FAB + nav */
@@ -274,10 +280,12 @@ main{padding-inline:38px 16px;padding-block:14px 0;max-width:760px}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 /* ---------- class settings ---------- */
-const CLASS_Q='Are you from FE Division A, PRPCET (Pravin Rohidas Patil College)?';
+const CLASS_Q='Are you PRP Division A FE?';
+const CLASS_PITCH='Tap Yes to get all the assignments already posted, and a notification whenever a new one is added.';
 const CLASS_NAME='FE Division A · PRPCET';
 const CLASS_SHORT='Div A';
 
@@ -319,7 +327,7 @@ const DEFAULT_META=()=>({xp:0,badges:{},seeded:false,classAsked:false,classMode:
   {id:'math',name:'Maths',color:0},{id:'phy',name:'Physics',color:1},{id:'chem',name:'Chemistry',color:2},{id:'mech',name:'Mechanics',color:3},
   {id:'beee',name:'BEEE',color:4},{id:'pce',name:'PCE',color:5},{id:'cprog',name:'C Programming',color:6},{id:'hv',name:'Human Values',color:7}]});
 const S={local:[],items:[],meta:DEFAULT_META(),view:'list',filter:'all',showDone:false,calMonth:(()=>{const d=today0();d.setDate(1);return d})(),calSel:ymd(today0()),edit:null,
-  auth:null,fdb:null,cls:{user:null,isAdmin:false,assignments:[],students:{},loaded:false,unsubs:[]}};
+  auth:null,fdb:null,cls:{user:null,isAdmin:false,assignments:[],students:{},loaded:false,unsubs:[],fresh:new Set(),known:null}};
 const saveMeta=()=>store.put('meta',S.meta,'state').catch(()=>{});
 const saveItem=it=>store.put('items',it).catch(()=>toast("Couldn't save. Your phone may be out of space."));
 const findItem=id=>S.items.find(i=>i.id===id);
@@ -469,7 +477,7 @@ function dueLabelOf(it){const n=diffDays(it.due);if(n<0)return{t:`Overdue · ${-
 function cardHTML(it){const d=it.status==='done'?{t:'Done'+(it.doneAt?' '+shortDate(new Date(it.doneAt)):''),c:''}:dueLabelOf(it);const nf=it.cls?it.imageCount:(it.fileIds||[]).length;
   return `<article class="card ${it.status==='done'?'done':''}" data-id="${it.id}">
     <button class="tick" data-act="toggle" aria-label="${it.status==='done'?'Mark not done':'Mark done'}">${ICON_CHECK}</button>
-    <button class="c-main" data-act="open"><h3>${esc(it.title)}</h3><div class="meta">${tagHTML(it)}<span class="due ${d.c}">${d.t}</span>${nf?`<span class="clip">${ICON_CLIP}${nf}</span>`:''}${it.cls?`<span class="ex cls">${CLASS_SHORT}</span>`:''}${it.sample?'<span class="ex">Example</span>':''}</div></button></article>`}
+    <button class="c-main" data-act="open"><h3>${esc(it.title)}</h3><div class="meta">${tagHTML(it)}<span class="due ${d.c}">${d.t}</span>${nf?`<span class="clip">${ICON_CLIP}${nf}</span>`:''}${it.cls?`<span class="ex cls">${CLASS_SHORT}</span>`:''}${it.cls&&S.cls.fresh.has(it.cid)?'<span class="ex new">New</span>':''}${it.sample?'<span class="ex">Example</span>':''}</div></button></article>`}
 
 function renderList(){
   const el=$('#v-list');const todoAll=S.items.filter(i=>i.status!=='done');
@@ -508,12 +516,12 @@ function renderCal(){
 
 function renderClass(){const el=$('#v-class');
   if(!fbReady()){el.innerHTML=`<div class="panel"><h2>Class isn't set up yet</h2><p>The class list and leaderboard need the Firebase settings in <b>firebase-config.js</b>. Follow the setup guide, then reload this page.</p><p class="muted">Your own assignments still work and are saved on this phone.</p></div>`;return}
-  if(S.meta.classMode!=='yes'){el.innerHTML=`<div class="panel join"><span class="lbl">Your class</span><h2>${esc(CLASS_Q)}</h2><p>Joining gets you the assignments posted for the class and puts you on the leaderboard. You'll sign in with Google so your ticks count for you.</p><button class="btn primary" data-act="joinyes">Yes, I'm in ${CLASS_SHORT}</button></div>`;return}
+  if(S.meta.classMode!=='yes'){el.innerHTML=`<div class="panel join"><span class="lbl">Your class</span><h2>${esc(CLASS_Q)}</h2><p>${CLASS_PITCH} You'll sign in with Google so your ticks count for you on the leaderboard.</p><button class="btn primary" data-act="joinyes">Yes</button></div>`;return}
   if(!S.cls.user){el.innerHTML=`<div class="panel"><h2>Sign in to see ${CLASS_SHORT}</h2><p class="muted">Sign in with Google so your ticks count for you on the leaderboard.</p><div class="row"><button class="btn primary" data-act="signin">Sign in with Google</button><button class="btn ghost" data-act="leave">I'm not in ${CLASS_SHORT}</button></div></div>`;return}
   const rows=board(),me=S.cls.user.uid,as=S.cls.assignments,open=as.filter(a=>diffDays(a.due)>=0).length;
   const mine=rows.find(r=>r.uid===me);
   let h=`<div class="panel"><span class="lbl">${CLASS_NAME}</span><h2>Class leaderboard</h2><p class="muted" style="margin:0">${as.length} assignment${as.length===1?'':'s'} posted · ${open} still open · ${rows.length} joined. Finished on time = 10 points, late = 5.</p></div>`;
-  if(S.cls.isAdmin)h+=`<div class="banner"><p>You're the class admin. Tap New and turn on “Post to all of ${CLASS_SHORT}” to give an assignment to everyone.</p></div>`;
+  if(S.cls.isAdmin)h+=`<div class="banner"><p>You're the class admin. Tap New and turn on “Post to all of ${CLASS_SHORT}” to give an assignment to everyone. Everyone with notifications on gets pinged within about 10 minutes.</p></div>`;
   if(!S.cls.loaded)h+=`<p class="empty">Loading the class…</p>`;
   else if(!rows.length)h+=`<p class="empty">No one has joined yet. Share the link in the class group.</p>`;
   else{
@@ -542,7 +550,8 @@ async function renderMore(){
   let cls='';
   if(fbReady()){
     if(S.meta.classMode==='yes')cls=`<div class="panel"><h2>Class</h2><p>${S.cls.user?`Signed in as <b>${esc(S.cls.user.displayName||S.cls.user.email||'you')}</b> in ${CLASS_NAME}.${S.cls.isAdmin?' You can post class assignments.':''}`:`Joined ${CLASS_NAME}, but not signed in.`}</p>
-      <div class="row">${S.cls.user?'<button class="btn" data-act="signout">Sign out</button>':'<button class="btn primary" data-act="signin">Sign in with Google</button>'}<button class="btn ghost" data-act="leave">Leave class</button></div></div>`;
+      <p class="muted">${esc(notifLine())}</p>
+      <div class="row">${notifState()==='default'?'<button class="btn primary" data-act="notifon">Turn on notifications</button>':''}${S.cls.user?'<button class="btn" data-act="signout">Sign out</button>':'<button class="btn primary" data-act="signin">Sign in with Google</button>'}<button class="btn ghost" data-act="leave">Leave class</button></div></div>`;
     else cls=`<div class="panel"><h2>Class</h2><p>Not joined. Join ${CLASS_NAME} to get class assignments and the leaderboard.</p><button class="btn" data-act="joinyes">Join ${CLASS_SHORT}</button></div>`;
   }
   $('#v-more').innerHTML=`${cls}
@@ -561,9 +570,17 @@ async function renderMore(){
 /* ---------- sheets ---------- */
 function openSheet(html){$('#sheetBody').innerHTML=html;$('#sheet').hidden=false;document.body.style.overflow='hidden'}
 function closeSheet(){$('#sheet').hidden=true;$('#sheetBody').innerHTML='';document.body.style.overflow='';if(S.edit){S.edit.add.forEach(a=>URL.revokeObjectURL(a.url));S.edit=null}}
-function askClass(){openSheet(`<div class="join"><span class="lbl">Your class</span><h2>${esc(CLASS_Q)}</h2>
-  <p>Say yes to get the assignments posted for ${CLASS_SHORT} and show up on the class leaderboard. You'll sign in with Google so your ticks count for you.</p>
-  <div class="row"><button class="btn primary" data-act="joinyes">Yes, I'm in ${CLASS_SHORT}</button><button class="btn" data-act="joinno">No, just my own list</button></div></div>`)}
+function askClass(){openSheet(`<div class="join"><span class="lbl">${CLASS_NAME}</span><h2>${esc(CLASS_Q)}</h2>
+  <p>${CLASS_PITCH}</p>
+  <div class="row"><button class="btn primary" data-act="joinyes">Yes</button><button class="btn" data-act="joinno">No, just my own list</button></div></div>`)}
+function askNotif(){if(!$('#sheet').hidden)return;const st=notifState();S.meta.notifAsked=true;saveMeta();
+  if(st==='ios'){openSheet(`<div class="join"><span class="lbl">Notifications</span><h2>Get a ping for new assignments</h2>
+    <p>On iPhone, notifications only work from the Home Screen. Tap <b>Share</b>, then <b>Add to Home Screen</b>. Open Inkline from there and turn on notifications under <b>More</b>.</p>
+    <div class="row"><button class="btn primary" data-act="close">Got it</button></div></div>`);return}
+  if(st!=='default')return;
+  openSheet(`<div class="join"><span class="lbl">Notifications</span><h2>Get a ping for new assignments?</h2>
+    <p>Inkline will send a notification to this phone whenever a new ${CLASS_SHORT} assignment is posted.</p>
+    <div class="row"><button class="btn primary" data-act="notifon">Turn on notifications</button><button class="btn" data-act="close">Not now</button></div></div>`)}
 
 async function openDetail(id){const it=findItem(id);if(!it)return;
   const d=it.status==='done'?{t:'Done'+(it.doneAt?' '+shortDate(new Date(it.doneAt)):''),c:''}:dueLabelOf(it);
@@ -634,7 +651,7 @@ async function submitClass(title,due,subId,notes){const e=S.edit;const db=S.fdb;
       let data;try{data=await toClassImage(a.blob)}catch(err){toast(`${a.name} is too big to post.`);continue}
       await db.collection('classImages').add({aid:ref.id,name:String(a.name).slice(0,80),data,at:FV.serverTimestamp()});added++}
     const doc={title,due,notes,subject:s?s.name:'',imageCount:e.keep.length+added,updatedAt:FV.serverTimestamp()};
-    if(!e.isCls)doc.createdAt=FV.serverTimestamp();
+    if(!e.isCls){doc.createdAt=FV.serverTimestamp();doc.notified=false}
     await ref.set(doc,{merge:true});
     const wasEdit=e.isCls;closeSheet();toast(wasEdit?'Updated for everyone':`Posted to ${CLASS_SHORT}`);
     if(skipped)setTimeout(()=>toast(`${skipped} non-photo file${skipped>1?'s were':' was'} left out. Only photos go to the class.`),900);
@@ -698,7 +715,7 @@ async function handleImport(file){let data;try{data=JSON.parse(await file.text()
       <div class="row"><button class="btn primary" data-act="merge">Add ${data.items.length} to my notebook</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
   }
   S.pendingImport=data}
-const keepClassMeta=()=>({classAsked:S.meta.classAsked,classMode:S.meta.classMode,clsXp:S.meta.clsXp||{}});
+const keepClassMeta=()=>({classAsked:S.meta.classAsked,classMode:S.meta.classMode,clsXp:S.meta.clsXp||{},notifAsked:S.meta.notifAsked,seenCls:S.meta.seenCls});
 async function doRestore(){const d=S.pendingImport;if(!d)return;
   try{await store.clear('items');await store.clear('files');urlCache.clear();
     for(const f of d.files||[])await store.put('files',{id:f.id,itemId:f.itemId,name:f.name,type:f.type,blob:dataURLToBlob(f.data),size:0});
@@ -736,7 +753,7 @@ async function signIn(){if(!S.auth)return;const p=new firebase.auth.GoogleAuthPr
     if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){try{await S.auth.signInWithRedirect(p)}catch(e2){signInErr(e2)}return}
     signInErr(e)}}
 function stopClass(){S.cls.unsubs.forEach(f=>{try{f()}catch(e){}});S.cls.unsubs=[];
-  Object.assign(S.cls,{user:null,isAdmin:false,assignments:[],students:{},loaded:false});rebuild()}
+  Object.assign(S.cls,{user:null,isAdmin:false,assignments:[],students:{},loaded:false,known:null});rebuild()}
 async function startClass(u){stopClass();S.cls.user=u;rebuild();render();const db=S.fdb;
   const ref=db.collection('students').doc(u.uid);
   const name=String(u.displayName||(u.email||'').split('@')[0]||'Classmate').slice(0,60),photo=u.photoURL?String(u.photoURL).slice(0,500):null;
@@ -746,9 +763,10 @@ async function startClass(u){stopClass();S.cls.user=u;rebuild();render();const d
   try{const a=await db.collection('admins').doc(u.uid).get();S.cls.isAdmin=a.exists}catch(e){S.cls.isAdmin=false}
   if(S.cls.user!==u)return;
   $('#fab').hidden=S.view==='more'||S.view==='class'&&!S.cls.isAdmin;
+  if(notifState()==='granted')saveToken();else if(!S.meta.notifAsked)setTimeout(askNotif,900);
   S.cls.unsubs.push(db.collection('classAssignments').orderBy('due').onSnapshot(q=>{
     S.cls.assignments=q.docs.map(d=>({id:d.id,...d.data({serverTimestamps:'estimate'})})).filter(a=>/^\d{4}-\d\d-\d\d$/.test(a.due||''));
-    S.cls.loaded=true;rebuild();softRender();checkBadges()},e=>{console.warn(e);toast("Couldn't load the class assignments.")}));
+    trackNew();S.cls.loaded=true;rebuild();softRender();checkBadges()},e=>{console.warn(e);toast("Couldn't load the class assignments.")}));
   S.cls.unsubs.push(db.collection('students').onSnapshot(q=>{const m={};
     q.docs.forEach(d=>{const x=d.data({serverTimestamps:'estimate'});const done={};
       for(const [k,v] of Object.entries(x.done||{}))if(v&&typeof v.toMillis==='function')done[k]=v.toMillis();
@@ -761,6 +779,42 @@ function initFirebase(){if(!fbReady())return;
     S.auth.getRedirectResult().catch(signInErr);
     S.auth.onAuthStateChanged(u=>{if(u&&S.meta.classMode==='yes')startClass(u);else{stopClass();render()}});
   }catch(e){console.error(e);S.auth=null;S.fdb=null}}
+
+/* ---------- notifications ---------- */
+const N={reg:null};
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
+const isStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
+function notifState(){if(!('Notification' in window)||!('serviceWorker' in navigator))return isIOS&&!isStandalone()?'ios':'unsupported';return Notification.permission}
+function notifLine(){return {granted:'Notifications are on for this phone.',denied:"Notifications are blocked. Allow them in your browser's site settings for this page.",
+  ios:'On iPhone, add Inkline to your Home Screen to get notifications.',unsupported:"This browser can't show notifications. Try Chrome.",default:'Notifications are off.'}[notifState()]}
+async function registerSW(){if(N.reg)return N.reg;if(!('serviceWorker' in navigator))return null;
+  try{N.reg=await navigator.serviceWorker.register('sw.js');return N.reg}catch(e){console.warn('sw',e);return null}}
+async function enableNotifs(){const st=notifState();
+  if(st==='ios'){S.meta.notifAsked=false;askNotif();return false}
+  if(st==='unsupported'){toast("This browser can't show notifications. Try Chrome.");return false}
+  let perm=Notification.permission;
+  if(perm==='default'){try{perm=await Notification.requestPermission()}catch(e){}}
+  if(S.view==='more')renderMore();
+  if(perm!=='granted'){toast(perm==='denied'?"Notifications are blocked. Allow them in your browser's site settings for this page.":'Notifications are still off.');return false}
+  await registerSW();await saveToken();
+  toast(`Notifications on. You'll get a ping for new ${CLASS_SHORT} assignments.`);return true}
+async function saveToken(){
+  try{if(!('Notification' in window)||Notification.permission!=='granted'||!S.cls.user||!S.fdb||!firebase.messaging)return;
+    const vapidKey=window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.vapidKey;if(!vapidKey||/^PASTE/.test(vapidKey))return;
+    if(!(await Promise.resolve(firebase.messaging.isSupported())))return;
+    const reg=await registerSW();if(!reg)return;
+    const token=await firebase.messaging().getToken({vapidKey,serviceWorkerRegistration:reg});if(!token)return;
+    await S.fdb.collection('pushTokens').doc(token).set({uid:S.cls.user.uid,at:firebase.firestore.FieldValue.serverTimestamp()});
+  }catch(e){console.warn('notifications',e)}}
+function trackNew(){const ids=S.cls.assignments.map(a=>a.id);let fresh=[];
+  if(!S.cls.known){const seen=S.meta.seenCls;if(Array.isArray(seen))fresh=S.cls.assignments.filter(a=>!seen.includes(a.id))}
+  else fresh=S.cls.assignments.filter(a=>!S.cls.known.has(a.id));
+  S.cls.known=new Set(ids);S.meta.seenCls=ids;saveMeta();
+  if(!fresh.length||S.cls.isAdmin)return;
+  fresh.forEach(a=>S.cls.fresh.add(a.id));
+  const msg=fresh.length===1?`New ${CLASS_SHORT} assignment: ${fresh[0].title}`:`${fresh.length} new ${CLASS_SHORT} assignments`;
+  if(document.visibilityState==='visible')setTimeout(()=>toast(msg,'big'),400);
+  else if(notifState()==='granted'&&N.reg)N.reg.showNotification('Inkline',{body:msg,icon:'icons/icon-192.png',badge:'icons/badge-96.png',tag:'inkline-new'}).catch(()=>{})}
 
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{
@@ -810,10 +864,11 @@ document.addEventListener('click',async e=>{
     case 'wipe':{await store.clear('items').catch(()=>{});await store.clear('files').catch(()=>{});urlCache.clear();S.local=[];
       S.meta=Object.assign(DEFAULT_META(),keepClassMeta(),{seeded:true,clsXp:{}});await saveMeta();rebuild();render();toast('Notebook cleared');break}
     case 'joinyes':{S.meta.classAsked=true;S.meta.classMode='yes';saveMeta();closeSheet();
-      if(!S.auth){toast("Class isn't set up yet.");render();break}
+      if(!S.auth){render();if(notifState()==='default'){S.meta.notifAsked=true;saveMeta();enableNotifs()}else toast(`You're in ${CLASS_SHORT}. Class assignments will show up here.`);break}
       if(S.auth.currentUser)startClass(S.auth.currentUser);else{render();signIn()}break}
     case 'joinno':S.meta.classAsked=true;S.meta.classMode='no';saveMeta();closeSheet();render();break;
     case 'signin':signIn();break;
+    case 'notifon':closeSheet();enableNotifs();break;
     case 'signout':if(S.auth)S.auth.signOut();toast('Signed out');break;
     case 'leave':{S.meta.classMode='no';S.meta.classAsked=true;saveMeta();if(S.auth&&S.auth.currentUser)S.auth.signOut();else{stopClass();render()}
       toast(`Left ${CLASS_SHORT}. Your own assignments are still here.`);break}
@@ -844,7 +899,8 @@ $('#importInput').addEventListener('change',e=>{const f=e.target.files[0];e.targ
   checkBadges(true);
   setView('list');
   initFirebase();
-  if(fbReady()&&!S.meta.classAsked)askClass();
+  registerSW();
+  if(!S.meta.classAsked)askClass();
 })();
 </script>
 </body>
