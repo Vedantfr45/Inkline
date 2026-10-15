@@ -12,5 +12,5 @@ self.FIREBASE_CONFIG = {
 
   // For notifications: Project settings → Cloud Messaging → Web Push certificates → Generate key pair.
   // Copy the long "Key pair" value here.
-  vapidKey: "PASTE_YOUR_WEB_PUSH_KEY"
+  vapidKey: "BHp5XqKlkFg3s8RII5DE9pyURH1ubnlx_FoZr0j_oKp9TFpnwzV5jgpF1dD39A5e93Q9EaZY4fM3OSbde2XFLUk"
 };
