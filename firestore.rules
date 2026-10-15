@@ -3,6 +3,7 @@ rules_version = '2';
 // Inkline · FE Division A, PRPCET
 // - Only admins (people listed in the "admins" collection) can post, edit or delete class assignments.
 // - Every signed-in classmate can read the class list and the leaderboard.
+// - Phones that turn on notifications save a token that only the GitHub notification sender can read.
 // - Each classmate can only change their own leaderboard entry, one tick at a time,
 //   and every tick is stamped with Google's server time, so nobody can fake finishing early.
 
@@ -47,6 +48,16 @@ service cloud.firestore {
       let changed = after.diff(before).affectedKeys();
       return changed.size() == 0
         || (changed.hasOnly([k]) && (!(k in after) || after[k] == request.time));
+    }
+
+    // One document per phone that turned on notifications. Only the GitHub sender reads these.
+    match /pushTokens/{token} {
+      allow read: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /students/{uid} {
